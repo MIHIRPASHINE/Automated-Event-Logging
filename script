@@ -1,0 +1,36 @@
+import boto3
+from uuid import uuid4
+
+def lambda_handler(event, context):
+    # Initialize the DynamoDB resource
+    dynamodb = boto3.resource('dynamodb')
+    dynamoTable = dynamodb.Table('S3-Logs')
+    
+    # Iterate over each record in the event
+    for record in event['Records']:
+        bucket_name = record['s3']['bucket']['name']
+        object_key = record['s3']['object']['key']
+        event_name = record['eventName']
+        event_time = record['eventTime']
+        
+        # Check if the event is a deletion
+        if 'ObjectRemoved' in event_name:
+            size = -1  # Size is not relevant for deletions
+            action = 'Deleted'
+        else:
+            size = record['s3']['object'].get('size', -1)
+            action = 'Created or Updated'
+        
+        # Put item in DynamoDB table
+        dynamoTable.put_item(
+            Item={
+                'unique': str(uuid4()),  # Generate a unique ID for each event
+                'Bucket': bucket_name,
+                'Object': object_key,
+                'Size': size,  # This will be -1 for deletions
+                'Event': event_name,
+                'EventTime': event_time,
+                'Action': action  # Indicates if the object was created/updated or deleted
+            }
+        )
+# Note: This code assumes the Lambda function is triggered by both object creation and deletion events from S3.
